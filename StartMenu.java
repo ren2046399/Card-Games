@@ -1,0 +1,244 @@
+import java.awt.*;
+import java.awt.event.*;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import javax.sound.sampled.*;
+import javax.swing.*;
+
+public class StartMenu extends JFrame {
+
+    public StartMenu() {
+        setTitle("Start Menu");
+        setSize(600, 400);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setUndecorated(true);
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
+
+        MenuPanel menuPanel = new MenuPanel();
+        add(menuPanel);
+        setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new StartMenu());
+    }
+}
+
+/**
+ * The MenuPanel handles rendering the menu and processing key and mouse events.
+ */
+class MenuPanel extends JPanel implements KeyListener, MouseListener, MouseMotionListener {
+
+    private List<MenuItem> menuItems;
+    private int currentIndex = 0;
+    private int startY;
+    private final int deltaY = 50;
+    private Image backgroundImage;
+
+    private static void playSound(String soundFile) {
+        try {
+            File file = new File(soundFile);
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(file);
+            Clip clip = AudioSystem.getClip();
+            clip.open(audioStream);
+            clip.start();
+        } catch (UnsupportedAudioFileException | IOException | LineUnavailableException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public MenuPanel() {
+        menuItems = new ArrayList<>();
+
+        // Attempt to load the background image; if not found, warn and proceed
+        try {
+            backgroundImage = new ImageIcon(getClass().getResource("/cards/CB.png")).getImage();
+        } catch (Exception e) {
+            System.out.println("Background image not found at /cards/CB.png");
+            backgroundImage = null;
+        }
+
+        // Black Jack menu item: start the game and close the StartMenu.
+        menuItems.add(new MenuItem("Black Jack", () -> {
+            System.out.println("Starting Black Jack game...");
+            new BlackJack().startGame();
+            // Dispose the StartMenu window:
+            Window win = SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (win != null) {
+                win.dispose();
+            }
+        }));
+
+        // Crazy Eights menu item: show the game window and close the StartMenu.
+        menuItems.add(new MenuItem("Crazy Eights", () -> {
+            System.out.println("Starting Crazy Eights game...");
+            CrazyEights crazyEights = new CrazyEights();
+            crazyEights.setVisible(true);
+            // Dispose the StartMenu window:
+            Window win = SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (win != null) {
+                win.dispose();
+            }
+        }));
+
+        // Exit menu item: close the StartMenu and exit the application.
+        menuItems.add(new MenuItem("Exit", () -> {
+            System.out.println("Exiting game...");
+            Window win = SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (win != null) {
+                win.dispose();
+            }
+            System.exit(0);
+        }));
+
+        if (!menuItems.isEmpty()) {
+            menuItems.get(currentIndex).setHighlighted(true);
+        }
+
+        setFocusable(true);
+        addKeyListener(this);
+        addMouseListener(this);
+        addMouseMotionListener(this);
+    }
+    
+
+    // Override addNotify to request focus when the component is added to its container
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        requestFocusInWindow();
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        // Calculate startY dynamically to center the menu items
+        startY = (getHeight() - (menuItems.size() * deltaY)) / 2;
+
+        // Draw the background image if available
+        if (backgroundImage != null) {
+            g2d.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), this);
+        }
+
+        // Draw menu items
+        for (int i = 0; i < menuItems.size(); i++) {
+            MenuItem item = menuItems.get(i);
+            String text = item.getText();
+
+            if (item.isHighlighted()) {
+                g2d.setFont(new Font("SansSerif", Font.BOLD, 48));
+                g2d.setColor(Color.RED);
+            } else {
+                g2d.setFont(new Font("SansSerif", Font.PLAIN, 32));
+                g2d.setColor(Color.WHITE);
+            }
+
+            FontMetrics fm = g2d.getFontMetrics();
+            int textX = (getWidth() - fm.stringWidth(text)) / 2;
+            int textY = startY + i * deltaY;
+            g2d.drawString(text, textX, textY);
+        }
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        int keyCode = e.getKeyCode();
+        if (keyCode == KeyEvent.VK_UP) {
+            if (currentIndex > 0) {
+                menuItems.get(currentIndex).setHighlighted(false);
+                currentIndex--;
+                menuItems.get(currentIndex).setHighlighted(true);
+                playSound("src\\sounds\\click2.wav");
+                repaint();
+            }
+        } else if (keyCode == KeyEvent.VK_DOWN) {
+            if (currentIndex < menuItems.size() - 1) {
+                menuItems.get(currentIndex).setHighlighted(false);
+                currentIndex++;
+                menuItems.get(currentIndex).setHighlighted(true);
+                playSound("src\\sounds\\click2.wav");
+                repaint();
+            }
+        } else if (keyCode == KeyEvent.VK_ENTER) {
+            playSound("src\\sounds\\click2.wav");
+            menuItems.get(currentIndex).doAction();
+        }
+    }
+
+    @Override public void keyReleased(KeyEvent e) {}
+    @Override public void keyTyped(KeyEvent e) {}
+
+    @Override public void mouseClicked(MouseEvent e) {
+        selectItemAtPoint(e.getPoint());
+        playSound("src\\sounds\\click2.wav");
+        menuItems.get(currentIndex).doAction();
+    }
+
+    @Override public void mouseMoved(MouseEvent e) {
+        selectItemAtPoint(e.getPoint());
+    }
+
+    private void selectItemAtPoint(Point p) {
+        int y = p.y;
+        for (int i = 0; i < menuItems.size(); i++) {
+            int itemCenter = startY + i * deltaY;
+            int halfHeight = deltaY / 2;
+            if (y >= (itemCenter - halfHeight) && y <= (itemCenter + halfHeight)) {
+                if (i != currentIndex) {
+                    menuItems.get(currentIndex).setHighlighted(false);
+                    currentIndex = i;
+                    menuItems.get(currentIndex).setHighlighted(true);
+                    repaint();
+                }
+                break;
+            }
+        }
+    }
+
+    @Override public void mousePressed(MouseEvent e) {}
+    @Override public void mouseReleased(MouseEvent e) {}
+    @Override public void mouseEntered(MouseEvent e) {}
+    @Override public void mouseExited(MouseEvent e) {}
+    @Override public void mouseDragged(MouseEvent e) {}
+}
+
+/**
+ * MenuItem class for storing menu entry data.
+ */
+class MenuItem {
+    private String text;
+    private boolean highlighted;
+    private Runnable action;
+
+    public MenuItem(String text, Runnable action) {
+        this.text = text;
+        this.action = action;
+        this.highlighted = false;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public boolean isHighlighted() {
+        return highlighted;
+    }
+
+    public void setHighlighted(boolean highlighted) {
+        this.highlighted = highlighted;
+    }
+
+    public void doAction() {
+        if (action != null) {
+            action.run();
+        }
+    }
+}
+
